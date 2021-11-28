@@ -28,6 +28,9 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import Toast from "react-native-root-toast";
+import { Audio } from "expo-av";
+import { Asset, useAssets } from "expo-asset";
+import * as FileSystem from "expo-file-system";
 
 export class Chat extends Component {
   constructor(props) {
@@ -41,9 +44,16 @@ export class Chat extends Component {
       image: "",
       imageBase64: "",
       cloudinary_url: "",
+      recordingState: false,
+      recordingUri: "",
+      recordingBase64: "",
+      recording: undefined,
     };
     this.onSend = this.onSend.bind(this);
     this.pickImageHandler = this.pickImageHandler.bind(this);
+    this.startRecording = this.startRecording.bind(this);
+    this.stopRecording = this.stopRecording.bind(this);
+    this.convertUriToBase64 = this.convertUriToBase64.bind(this);
   }
 
   //ask permission to pick image from gallery
@@ -96,12 +106,21 @@ export class Chat extends Component {
   actionLeft(props) {
     return (
       <>
-        <TouchableOpacity
-          onPress={() => {}}
-          style={{ marginLeft: 15, alignSelf: "center" }}
-        >
-          <FontAwesome name="microphone" size={25} color="#888" />
-        </TouchableOpacity>
+        {this.state.recordingState ? (
+          <TouchableOpacity
+            onPress={this.stopRecording}
+            style={{ marginLeft: 15, alignSelf: "center" }}
+          >
+            <FontAwesome name="microphone" size={25} color="#e5702a" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={this.startRecording}
+            style={{ marginLeft: 15, alignSelf: "center" }}
+          >
+            <FontAwesome name="microphone" size={25} color="#888" />
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           onPress={this.pickImageHandler}
@@ -169,7 +188,7 @@ export class Chat extends Component {
   }
 
   //send messages
-  async sendMessageHandler(text, messageId, image) {
+  async sendMessageHandler(text, messageId, image, audio) {
     const response = await fetch(
       "https://chat-module-9ae2a-default-rtdb.firebaseio.com/chat.json",
       {
@@ -188,6 +207,7 @@ export class Chat extends Component {
             avatar:
               "https://www.kindpng.com/picc/m/269-2697881_computer-icons-user-clip-art-transparent-png-icon.png",
           },
+          audio,
           image,
           sent: true,
         }),
@@ -225,12 +245,13 @@ export class Chat extends Component {
 
     const modifiedMessageObj = chatArray
       ?.reverse()
-      .map(({ messageId, message, createdAt, user, image, sent }) => ({
+      .map(({ messageId, message, createdAt, user, image, sent, audio }) => ({
         _id: messageId,
         text: message,
         createdAt: createdAt,
         user: user,
         image,
+        audio,
         sent,
       }));
 
@@ -241,30 +262,60 @@ export class Chat extends Component {
     this.setState({ isLoading: false });
   }
 
+  //send image to cloudinary
+  async uploadImageToCloudinary(text, messageId) {
+    Toast.show("Sending Photo...", { duration: Toast.durations.SHORT });
+
+    let base64Url = `data:image/jpg;base64,${this.state.imageBase64}`;
+    let apiUrl = "https://api.cloudinary.com/v1_1/dxnblz2x7/image/upload";
+
+    let data = {
+      file: base64Url,
+      upload_preset: "bmo3flyd",
+    };
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    const resData = await response.json();
+    const image_url = resData.secure_url;
+
+    this.sendMessageHandler(text, messageId, image_url);
+  }
+
+  //send audio to cloudinary
+  async uploadAudioToCloudinary(text, messageId) {
+    let base64Url = `data:audio/m4a;base64,${this.state.recordingBase64}`; //add base64
+    let apiUrl = "https://api.cloudinary.com/v1_1/dxnblz2x7/upload";
+
+    let data = {
+      file: base64Url,
+      upload_preset: "bmo3flyd",
+      resource_type: "video",
+    };
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    const resData = await response.json();
+    const audio = resData.secure_url;
+
+    this.sendMessageHandler(text, messageId, undefined, audio);
+  }
+
   //send message handler
   async onSend(messages = []) {
     if (this.state.image != "") {
-      Toast.show("Sending Photo...", { duration: Toast.durations.LONG });
-
-      let base64Url = `data:image/jpg;base64,${this.state.imageBase64}`;
-      let apiUrl = "https://api.cloudinary.com/v1_1/dxnblz2x7/image/upload";
-
-      let data = {
-        file: base64Url,
-        upload_preset: "bmo3flyd",
-      };
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      const resData = await response.json();
-      const image_url = resData.secure_url;
-
       const text = messages[0].text;
       const messageId = messages[0]._id;
 
@@ -276,15 +327,112 @@ export class Chat extends Component {
         messages: GiftedChat.append(previousState.messages, addImageInMessage),
       }));
 
-      this.sendMessageHandler(text, messageId, image_url);
+      this.uploadImageToCloudinary(text, messageId);
+    } else if (this.state.recordingUri != "") {
+      Toast.show("Sending Audio...", { duration: Toast.durations.SHORT });
+
+      const text = messages[0].text;
+      const messageId = messages[0]._id;
+
+      const addRecordingInMessage = [
+        { ...messages[0], audio: this.state.recordingUri, sent: true },
+      ];
+
+      this.setState((previousState) => ({
+        messages: GiftedChat.append(
+          previousState.messages,
+          addRecordingInMessage
+        ),
+      }));
+
+      this.uploadAudioToCloudinary(text, messageId);
     } else {
       const text = messages[0].text;
       const messageId = messages[0]._id;
+
+      const addExtraField = [{ ...messages[0], sent: true }];
+
       this.setState((previousState) => ({
-        messages: GiftedChat.append(previousState.messages, messages),
+        messages: GiftedChat.append(previousState.messages, addExtraField),
       }));
       this.sendMessageHandler(text, messageId);
     }
+  }
+
+  //start recording voice
+  async startRecording() {
+    try {
+      console.log("Requesting permissions..");
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      console.log("Starting recording..");
+      this.setState({ recordingState: true });
+
+      let recording = new Audio.Recording();
+
+      this.setState({ recording: recording });
+
+      await recording.prepareToRecordAsync(
+        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
+      );
+      await recording.startAsync();
+      console.log("Recording started");
+    } catch (err) {
+      this.setState({ recordingState: false });
+      console.error("Failed to start recording", err);
+    }
+  }
+
+  //convert recording uri to base64
+  async convertUriToBase64(uri) {
+    // Base64 encoding for reading & writing
+    const options = { encoding: FileSystem.EncodingType.Base64 };
+
+    // Read the audio resource from it's local Uri
+    const data = await FileSystem.readAsStringAsync(uri, options);
+
+    this.setState({ recordingBase64: data });
+  }
+
+  //stop recording audio
+  async stopRecording() {
+    this.setState({ recordingState: false });
+    console.log("Stopping recording..");
+    await this.state.recording.stopAndUnloadAsync();
+    const uri = this.state.recording.getURI();
+    this.convertUriToBase64(uri);
+    this.setState({ recordingUri: uri });
+    this.setState({ recording: undefined });
+    console.log("Recording stopped and stored at", uri);
+  }
+
+  //render recording
+  async renderAudio(props) {
+    return (
+      <Bubble
+        {...props}
+        renderMessageAudio={() => (
+          <TouchableOpacity onPress={this.playSound}>
+            <FontAwesome name="microphone" size={25} color="#e5702a" />
+          </TouchableOpacity>
+        )}
+      />
+    );
+  }
+
+  //play audio
+  async playSound(audio) {
+    console.log("Loading Sound");
+    const { sound } = await Audio.Sound.createAsync({
+      uri: audio,
+    });
+    console.log(sound);
+
+    console.log("Playing Sound");
+    await sound.playAsync();
   }
 
   render() {
@@ -333,13 +481,10 @@ export class Chat extends Component {
         <GiftedChat
           messages={this.state.messages}
           showAvatarForEveryMessage={true}
+          alwaysShowSend={true}
           onInputTextChanged={(text) => console.log(text)}
           showUserAvatar={true}
           onSend={(messages) => {
-            console.log("MES", messages);
-            if (!messages) {
-              return ToastAndroid.showWithGravity("Please type a caption");
-            }
             this.onSend(messages);
           }}
           user={{
@@ -350,6 +495,22 @@ export class Chat extends Component {
           renderBubble={(props) => {
             return (
               <Bubble
+                renderMessageAudio={(props) => (
+                  <TouchableOpacity
+                    onPress={() => this.playSound(props.currentMessage.audio)}
+                    style={{
+                      padding: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                    }}
+                  >
+                    <FontAwesome name="microphone" size={25} color="#fff" />
+                    <Text style={{ marginLeft: 10, color: "#fff" }}>
+                      Sent a voice message.
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 {...props}
                 textStyle={{
                   right: {
