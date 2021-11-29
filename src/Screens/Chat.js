@@ -167,7 +167,7 @@ export class Chat extends Component {
   }
 
   //render Image in Footer
-  renderImageInFooter() {
+  renderInFooter(props) {
     return this.state.image ? (
       <View style={{ padding: 10 }}>
         <TouchableOpacity
@@ -181,6 +181,28 @@ export class Chat extends Component {
           source={{ uri: this.state?.image }}
           style={{ width: 80, height: 80, borderRadius: 10 }}
         />
+      </View>
+    ) : this.state.recordingUri ? (
+      <View
+        style={{
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#fff",
+          borderWidth: 1,
+          borderColor: "#e5702a",
+          borderRadius: 5,
+          margin: 10,
+          width: Dimensions.get("window").width / 6.6,
+          height: Dimensions.get("window").width / 6.6,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => this.setState({ recordingUri: "" })}
+          style={{ position: "absolute", left: 48, top: -22, zIndex: 2 }}
+        >
+          <Ionicons name="close-circle" size={30} color="#e5702a" />
+        </TouchableOpacity>
+        <FontAwesome name="microphone" size={25} color="#e5702a" />
       </View>
     ) : (
       <View />
@@ -214,6 +236,7 @@ export class Chat extends Component {
       }
     );
     this.setState({ image: "" });
+    this.setState({ recordingUri: "" });
     const resData = await response.json();
     console.log("MESSAGE SENT", resData);
   }
@@ -371,14 +394,14 @@ export class Chat extends Component {
       console.log("Starting recording..");
       this.setState({ recordingState: true });
 
-      let recording = new Audio.Recording();
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
+      );
+
+      console.log("RECORDING OBJECT", recording);
 
       this.setState({ recording: recording });
 
-      await recording.prepareToRecordAsync(
-        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
-      );
-      await recording.startAsync();
       console.log("Recording started");
     } catch (err) {
       this.setState({ recordingState: false });
@@ -400,12 +423,12 @@ export class Chat extends Component {
   //stop recording audio
   async stopRecording() {
     this.setState({ recordingState: false });
+    this.setState({ recording: undefined });
     console.log("Stopping recording..");
-    await this.state.recording.stopAndUnloadAsync();
     const uri = this.state.recording.getURI();
+    await this.state.recording.stopAndUnloadAsync();
     this.convertUriToBase64(uri);
     this.setState({ recordingUri: uri });
-    this.setState({ recording: undefined });
     console.log("Recording stopped and stored at", uri);
   }
 
@@ -425,12 +448,9 @@ export class Chat extends Component {
 
   //play audio
   async playSound(audio) {
-    console.log("Loading Sound");
     const { sound } = await Audio.Sound.createAsync({
       uri: audio,
     });
-    console.log(sound);
-
     console.log("Playing Sound");
     await sound.playAsync();
   }
@@ -480,6 +500,10 @@ export class Chat extends Component {
         )}
         <GiftedChat
           messages={this.state.messages}
+          text={
+            (this.state.recordingUri && "Audio: Tab to play") ||
+            (this.state.image && "Image")
+          }
           showAvatarForEveryMessage={true}
           alwaysShowSend={true}
           onInputTextChanged={(text) => console.log(text)}
@@ -536,7 +560,7 @@ export class Chat extends Component {
           renderInputToolbar={(props) => this.customtInputToolbar(props)}
           renderActions={(props) => this.actionLeft(props)}
           renderSend={(props) => this.customSendBtn(props)}
-          renderFooter={(props) => this.renderImageInFooter(props)}
+          renderFooter={(props) => this.renderInFooter(props)}
           renderMessageImage={(props) => this.renderMessageImage(props)}
         />
       </View>
