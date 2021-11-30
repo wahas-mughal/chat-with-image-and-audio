@@ -8,6 +8,7 @@ import {
   LogBox,
   Image,
   ToastAndroid,
+  Alert,
 } from "react-native";
 import {
   GiftedChat,
@@ -22,8 +23,10 @@ import {
   AntDesign,
   MaterialCommunityIcons,
   FontAwesome5,
+  MaterialIcons,
   FontAwesome,
   Ionicons,
+  Entypo,
 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -71,6 +74,31 @@ export class Chat extends Component {
     this.imagePermissionHandler();
   }
 
+  //delete chat
+  async deleteMessageAlert(key) {
+    Alert.alert("Confirm", "Are you sure to delete this message?", [
+      { text: "Yes", onPress: () => this.deleteMessage(key) },
+      { text: "No" },
+    ]);
+  }
+
+  async deleteMessage(key) {
+    const filterMessages = this.state.messages.filter((msg) => msg.key !== key);
+    this.setState({ messages: filterMessages });
+    Toast.show("Deleting message...", { duration: Toast.durations.SHORT });
+    const response = await fetch(
+      `https://chat-module-9ae2a-default-rtdb.firebaseio.com/chat/${key}.json`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    const resData = await response.json();
+    console.log("DELETED", resData);
+  }
+
   //pick image from gallery
   async pickImageHandler() {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -111,7 +139,7 @@ export class Chat extends Component {
             onPress={this.stopRecording}
             style={{ marginLeft: 15, alignSelf: "center" }}
           >
-            <FontAwesome name="microphone" size={25} color="#e5702a" />
+            <FontAwesome name="microphone" size={30} color="#e5702a" />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -200,7 +228,7 @@ export class Chat extends Component {
           onPress={() => this.setState({ recordingUri: "" })}
           style={{ position: "absolute", left: 48, top: -22, zIndex: 2 }}
         >
-          <Ionicons name="close-circle" size={30} color="#e5702a" />
+          <Ionicons name="close-circle" size={36} color="#e5702a" />
         </TouchableOpacity>
         <FontAwesome name="microphone" size={25} color="#e5702a" />
       </View>
@@ -263,20 +291,23 @@ export class Chat extends Component {
     let chatArray = [];
 
     for (const key in resData) {
-      chatArray.push(resData[key]);
+      chatArray.push({ ...resData[key], key: key });
     }
 
     const modifiedMessageObj = chatArray
       ?.reverse()
-      .map(({ messageId, message, createdAt, user, image, sent, audio }) => ({
-        _id: messageId,
-        text: message,
-        createdAt: createdAt,
-        user: user,
-        image,
-        audio,
-        sent,
-      }));
+      .map(
+        ({ messageId, message, createdAt, user, image, sent, audio, key }) => ({
+          _id: messageId,
+          text: message,
+          createdAt: createdAt,
+          user: user,
+          image,
+          audio,
+          sent,
+          key,
+        })
+      );
 
     console.log(modifiedMessageObj);
 
@@ -500,10 +531,10 @@ export class Chat extends Component {
         )}
         <GiftedChat
           messages={this.state.messages}
-          text={
-            (this.state.recordingUri && "Audio: Tab to play") ||
-            (this.state.image && "Image")
-          }
+          // text={
+          //   (this.state.recordingUri && "Audio: Tab to play") ||
+          //   (this.state.image && "Image")
+          // }
           showAvatarForEveryMessage={true}
           alwaysShowSend={true}
           onInputTextChanged={(text) => console.log(text)}
@@ -520,20 +551,22 @@ export class Chat extends Component {
             return (
               <Bubble
                 renderMessageAudio={(props) => (
-                  <TouchableOpacity
-                    onPress={() => this.playSound(props.currentMessage.audio)}
-                    style={{
-                      padding: 20,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                    }}
-                  >
-                    <FontAwesome name="microphone" size={25} color="#fff" />
-                    <Text style={{ marginLeft: 10, color: "#fff" }}>
-                      Sent a voice message.
-                    </Text>
-                  </TouchableOpacity>
+                  <View>
+                    <TouchableOpacity
+                      onPress={() => this.playSound(props.currentMessage.audio)}
+                      style={{
+                        padding: 20,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row",
+                      }}
+                    >
+                      <FontAwesome name="microphone" size={25} color="#fff" />
+                      <Text style={{ marginLeft: 10, color: "#fff" }}>
+                        Sent a voice message.
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
                 {...props}
                 textStyle={{
@@ -554,7 +587,11 @@ export class Chat extends Component {
                     marginBottom: 7,
                   },
                 }}
-              />
+              >
+                <View style={{ width: 80, height: 80 }}>
+                  <Text style={{ color: "#000" }}> Custom View</Text>
+                </View>
+              </Bubble>
             );
           }}
           renderInputToolbar={(props) => this.customtInputToolbar(props)}
@@ -562,6 +599,14 @@ export class Chat extends Component {
           renderSend={(props) => this.customSendBtn(props)}
           renderFooter={(props) => this.renderInFooter(props)}
           renderMessageImage={(props) => this.renderMessageImage(props)}
+          renderCustomView={(props) => (
+            <TouchableOpacity
+              style={{ alignItems: "flex-end", margin: 10 }}
+              onPress={() => this.deleteMessageAlert(props.currentMessage.key)}
+            >
+              <Entypo name="circle-with-cross" size={24} color="#fff" />
+            </TouchableOpacity>
+          )}
         />
       </View>
     );

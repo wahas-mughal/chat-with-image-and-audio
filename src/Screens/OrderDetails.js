@@ -23,26 +23,28 @@ export default class OrderDetails extends React.Component {
         </Text>
 
         {this.state.isPopupTrue ? (
-          <View style={styles.addOptions}>
-            <View style={styles.popup}>
-              <MaterialIcons name="gps-fixed" size={26} color="#fff" />
-            </View>
-            <View style={styles.popup}>
-              <FontAwesome name="road" size={24} color="#fff" />
-            </View>
-            <View style={styles.popup}>
-              <MaterialIcons name="gps-fixed" size={26} color="#fff" />
-            </View>
-            <View style={styles.popup}>
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={26}
-                color="#fff"
-                onPress={() => {
-                  this.setState({ isPopupTrue: false });
-                  this.props.navigation.navigate("chat");
-                }}
-              />
+          <View>
+            <View style={styles.addOptions}>
+              <View style={styles.popup}>
+                <MaterialIcons name="gps-fixed" size={26} color="#fff" />
+              </View>
+              <View style={styles.popup}>
+                <FontAwesome name="road" size={24} color="#fff" />
+              </View>
+              <View style={styles.popup}>
+                <MaterialIcons name="gps-fixed" size={26} color="#fff" />
+              </View>
+              <View style={styles.popup}>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={26}
+                  color="#fff"
+                  onPress={() => {
+                    this.setState({ isPopupTrue: false });
+                    this.props.navigation.navigate("chat");
+                  }}
+                />
+              </View>
             </View>
           </View>
         ) : (
@@ -79,9 +81,8 @@ const styles = StyleSheet.create({
   },
   addOptions: {
     position: "absolute",
-    top: Dimensions.get("window").height / 2.2,
-    right: Dimensions.get("window").height / 23,
-    alignSelf: "flex-end",
+    top: Dimensions.get("window").height / 2.4,
+    right: Dimensions.get("window").height / 100,
   },
   popup: {
     backgroundColor: "#e5702a",
