@@ -35,11 +35,6 @@ import Toast from "react-native-root-toast";
 import { Audio } from "expo-av";
 import { Asset, useAssets } from "expo-asset";
 import * as FileSystem from "expo-file-system";
-import Dialog, {
-  DialogTitle,
-  DialogContent,
-  DialogFooter,
-} from "react-native-popup-dialog";
 
 export class Chat extends Component {
   constructor(props) {
