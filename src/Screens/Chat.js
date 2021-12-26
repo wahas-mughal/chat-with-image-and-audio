@@ -9,6 +9,7 @@ import {
   Image,
   ToastAndroid,
   Alert,
+  Modal,
 } from "react-native";
 import {
   GiftedChat,
@@ -34,6 +35,11 @@ import Toast from "react-native-root-toast";
 import { Audio } from "expo-av";
 import { Asset, useAssets } from "expo-asset";
 import * as FileSystem from "expo-file-system";
+import Dialog, {
+  DialogTitle,
+  DialogContent,
+  DialogFooter,
+} from "react-native-popup-dialog";
 
 export class Chat extends Component {
   constructor(props) {
@@ -46,6 +52,7 @@ export class Chat extends Component {
       messageText: "",
       image: "",
       imageBase64: "",
+      defaultAnimationDialog: false,
       cloudinary_url: "",
       recordingState: false,
       recordingUri: "",
@@ -57,6 +64,7 @@ export class Chat extends Component {
     this.startRecording = this.startRecording.bind(this);
     this.stopRecording = this.stopRecording.bind(this);
     this.convertUriToBase64 = this.convertUriToBase64.bind(this);
+    this.openCamera = this.openCamera.bind(this);
   }
 
   //ask permission to pick image from gallery
@@ -72,6 +80,7 @@ export class Chat extends Component {
 
   componentDidMount() {
     this.imagePermissionHandler();
+    this.dialogHandler();
   }
 
   //delete chat
@@ -109,6 +118,30 @@ export class Chat extends Component {
       base64: true,
     });
 
+    if (!result.cancelled) {
+      this.setState({ defaultAnimationDialog: false });
+      this.setState({ image: result.uri });
+      console.log(result);
+      this.setState({ imageBase64: result.base64 });
+    }
+  }
+
+  //open camera
+  async openCamera() {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (permissionResult.granted === false) {
+      alert("You've refused to allow this appp to access your camera!");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+      base64: true,
+    });
+    this.setState({ defaultAnimationDialog: false });
     if (!result.cancelled) {
       this.setState({ image: result.uri });
       console.log(result);
@@ -151,7 +184,10 @@ export class Chat extends Component {
         )}
 
         <TouchableOpacity
-          onPress={this.pickImageHandler}
+          onPress={() => {
+            console.log("reached");
+            this.setState({ defaultAnimationDialog: true });
+          }}
           style={{ marginLeft: 15, alignSelf: "center" }}
         >
           <AntDesign name="camera" size={28} color="#888" />
@@ -176,10 +212,14 @@ export class Chat extends Component {
   }
 
   //custom send button
-  customSendBtn(props) {
+  customSendBtn({ onSend, text, sendButtonProps, ...sendProps }) {
     return (
       <Send
-        {...props}
+        {...sendProps}
+        sendButtonProps={{
+          ...sendButtonProps,
+          onPress: () => this.customSendPress(text, onSend),
+        }}
         containerStyle={{
           backgroundColor: "#e5702a",
           justifyContent: "center",
@@ -367,6 +407,21 @@ export class Chat extends Component {
     this.sendMessageHandler(text, messageId, undefined, audio);
   }
 
+  //custom send button
+  //Where onSend is the function use to onsend;
+  async customSendPress(text, onSend) {
+    if (this.state.image && !text && onSend) {
+      onSend({ text: text.trim() }, true);
+    } else if (this.state.recordingUri && !text && onSend) {
+      onSend({ text: text.trim() }, true);
+    } else if (text && onSend) {
+      onSend({ text: text.trim() }, true);
+      0;
+    } else {
+      return false;
+    }
+  }
+
   //send message handler
   async onSend(messages = []) {
     if (this.state.image != "") {
@@ -507,7 +562,10 @@ export class Chat extends Component {
               size={30}
               color="#fff"
               style={{ marginLeft: 10 }}
-              onPress={() => this.props.navigation.goBack()}
+              onPress={() => {
+                this.setState({ isPopupTrue: false });
+                this.props.navigation.navigate("OrderDetails");
+              }}
             />
             <Text
               style={{
@@ -531,10 +589,6 @@ export class Chat extends Component {
         )}
         <GiftedChat
           messages={this.state.messages}
-          // text={
-          //   (this.state.recordingUri && "Audio: Tab to play") ||
-          //   (this.state.image && "Image")
-          // }
           showAvatarForEveryMessage={true}
           alwaysShowSend={true}
           onInputTextChanged={(text) => console.log(text)}
@@ -608,6 +662,45 @@ export class Chat extends Component {
             </TouchableOpacity>
           )}
         />
+        <Modal visible={this.state.defaultAnimationDialog} transparent={true}>
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "rgba(0,0,0,0.3)",
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: "#fff",
+                width: Dimensions.get("window").width / 1.1,
+                height: Dimensions.get("window").width / 2.5,
+                borderRadius: 10,
+                justifyContent: "center",
+                padding: 20,
+              }}
+            >
+              <TouchableOpacity
+                onPress={this.openCamera}
+                style={{ marginBottom: 20 }}
+              >
+                <Text style={styles.text}> Take Phone </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={this.pickImageHandler}
+                style={{ marginBottom: 20 }}
+              >
+                <Text style={styles.text}> Choose from library </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => this.setState({ defaultAnimationDialog: false })}
+              >
+                <Text style={styles.text}> Cancel </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -706,6 +799,9 @@ const styles = StyleSheet.create({
     height: "40%",
     justifyContent: "flex-end",
     alignItems: "center",
+  },
+  text: {
+    fontSize: RFPercentage(2),
   },
 });
 
